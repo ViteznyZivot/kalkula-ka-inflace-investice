@@ -43,6 +43,13 @@
                     </div>
                     
                     <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Měsíční investice (Kč)</label>
+                        <input type="number" id="monthlyInvestment" value="5000" min="0"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">Zadejte 0 pro jednorázovou investici</p>
+                    </div>
+                    
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Počet let</label>
                         <input type="number" id="years" value="10" min="1" max="50"
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
@@ -92,6 +99,7 @@
 
         function calculate() {
             const initialAmount = parseFloat(document.getElementById('initialAmount').value);
+            const monthlyInvestment = parseFloat(document.getElementById('monthlyInvestment').value) || 0;
             const investmentReturn = parseFloat(document.getElementById('investmentReturn').value) / 100;
             const inflationRate = parseFloat(document.getElementById('inflationRate').value) / 100;
             const years = parseInt(document.getElementById('years').value);
@@ -101,24 +109,47 @@
                 return;
             }
 
-            // Výpočty
-            const finalInvestmentValue = initialAmount * Math.pow(1 + investmentReturn, years);
-            const inflationAdjustedValue = initialAmount * Math.pow(1 + inflationRate, years);
+            // Výpočty s měsíčními investicemi
+            const monthlyReturn = investmentReturn / 12;
+            const totalMonths = years * 12;
+            
+            // Hodnota počáteční investice
+            const initialFinalValue = initialAmount * Math.pow(1 + investmentReturn, years);
+            
+            // Hodnota měsíčních investic (budoucí hodnota anuity)
+            let monthlyFinalValue = 0;
+            if (monthlyInvestment > 0) {
+                monthlyFinalValue = monthlyInvestment * (Math.pow(1 + monthlyReturn, totalMonths) - 1) / monthlyReturn;
+            }
+            
+            const finalInvestmentValue = initialFinalValue + monthlyFinalValue;
+            const totalInvested = initialAmount + (monthlyInvestment * totalMonths);
+            
+            const inflationAdjustedValue = totalInvested * Math.pow(1 + inflationRate, years);
             const realValue = finalInvestmentValue / Math.pow(1 + inflationRate, years);
-            const realGain = realValue - initialAmount;
-            const realReturnRate = ((realValue / initialAmount) ** (1/years) - 1) * 100;
+            const realGain = realValue - totalInvested;
+            const realReturnRate = totalInvested > 0 ? ((realValue / totalInvested) ** (1/years) - 1) * 100 : 0;
 
             // Zobrazení výsledků
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = `
                 <div class="space-y-4">
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <span class="text-gray-600 text-xl mr-2">💰</span>
+                            <h3 class="font-semibold text-gray-800">Celkem investováno</h3>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-700">${formatCurrency(totalInvested)}</p>
+                        <p class="text-sm text-gray-600">${formatCurrency(initialAmount)} + ${monthlyInvestment > 0 ? formatCurrency(monthlyInvestment * totalMonths) + ' měsíčně' : '0 měsíčně'}</p>
+                    </div>
+
                     <div class="bg-green-50 border border-green-200 rounded-lg p-4">
                         <div class="flex items-center mb-2">
                             <span class="text-green-600 text-xl mr-2">📈</span>
                             <h3 class="font-semibold text-green-800">Hodnota investice</h3>
                         </div>
                         <p class="text-2xl font-bold text-green-700">${formatCurrency(finalInvestmentValue)}</p>
-                        <p class="text-sm text-green-600">Po ${years} letech</p>
+                        <p class="text-sm text-green-600">Po ${years} letech (zisk: ${formatCurrency(finalInvestmentValue - totalInvested)})</p>
                     </div>
 
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -130,33 +161,33 @@
                         <p class="text-sm text-blue-600">Očištěno o inflaci</p>
                     </div>
 
-                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                        <div class="flex items-center mb-2">
-                            <span class="text-orange-600 text-xl mr-2">📉</span>
-                            <h3 class="font-semibold text-orange-800">Inflační ztráta</h3>
-                        </div>
-                        <p class="text-2xl font-bold text-orange-700">${formatCurrency(inflationAdjustedValue)}</p>
-                        <p class="text-sm text-orange-600">Hodnota ${formatCurrency(initialAmount)} po inflaci</p>
-                    </div>
-
                     <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
                         <div class="flex items-center mb-2">
                             <span class="text-purple-600 text-xl mr-2">🎯</span>
                             <h3 class="font-semibold text-purple-800">Reálný výnos</h3>
                         </div>
                         <p class="text-2xl font-bold text-purple-700">${realReturnRate.toFixed(2)}% ročně</p>
-                        <p class="text-sm text-purple-600">Zisk: ${formatCurrency(realGain)}</p>
+                        <p class="text-sm text-purple-600">Reálný zisk: ${formatCurrency(realGain)}</p>
                     </div>
                 </div>
             `;
 
             // Vytvoření grafu
-            createChart(initialAmount, investmentReturn, inflationRate, years);
+            createChart(initialAmount, monthlyInvestment, investmentReturn, inflationRate, years);
         }
 
-        function createChart(initialAmount, investmentReturn, inflationRate, years) {
+        function createChart(initialAmount, monthlyInvestment, investmentReturn, inflationRate, years) {
             const chartDiv = document.getElementById('chart');
-            const maxValue = initialAmount * Math.pow(1 + investmentReturn, years);
+            
+            // Výpočet maximální hodnoty pro škálování grafu
+            const monthlyReturn = investmentReturn / 12;
+            const totalMonths = years * 12;
+            const initialFinalValue = initialAmount * Math.pow(1 + investmentReturn, years);
+            let monthlyFinalValue = 0;
+            if (monthlyInvestment > 0) {
+                monthlyFinalValue = monthlyInvestment * (Math.pow(1 + monthlyReturn, totalMonths) - 1) / monthlyReturn;
+            }
+            const maxValue = initialFinalValue + monthlyFinalValue;
             
             let chartHTML = '<div class="w-full h-full relative">';
             
@@ -173,30 +204,39 @@
             
             // Čáry investice a inflace
             let investmentPoints = '';
-            let inflationPoints = '';
+            let totalInvestedPoints = '';
             let realValuePoints = '';
             
             for (let year = 0; year <= years; year++) {
                 const x = (year / years) * 100;
                 
-                const investmentValue = initialAmount * Math.pow(1 + investmentReturn, year);
+                // Hodnota investice s měsíčními příspěvky
+                const monthsElapsed = year * 12;
+                const initialValue = initialAmount * Math.pow(1 + investmentReturn, year);
+                let monthlyValue = 0;
+                if (monthlyInvestment > 0 && monthsElapsed > 0) {
+                    monthlyValue = monthlyInvestment * (Math.pow(1 + monthlyReturn, monthsElapsed) - 1) / monthlyReturn;
+                }
+                const investmentValue = initialValue + monthlyValue;
                 const investmentY = 100 - (investmentValue / maxValue) * 100;
                 
-                const inflationValue = initialAmount * Math.pow(1 + inflationRate, year);
-                const inflationY = 100 - (inflationValue / maxValue) * 100;
+                // Celková investovaná částka
+                const totalInvested = initialAmount + (monthlyInvestment * monthsElapsed);
+                const totalInvestedY = 100 - (totalInvested / maxValue) * 100;
                 
+                // Reálná hodnota
                 const realValue = investmentValue / Math.pow(1 + inflationRate, year);
                 const realY = 100 - (realValue / maxValue) * 100;
                 
                 investmentPoints += `${x},${investmentY} `;
-                inflationPoints += `${x},${inflationY} `;
+                totalInvestedPoints += `${x},${totalInvestedY} `;
                 realValuePoints += `${x},${realY} `;
             }
 
             chartHTML += `
                 <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                     <polyline points="${investmentPoints}" fill="none" stroke="#10B981" stroke-width="0.5" />
-                    <polyline points="${inflationPoints}" fill="none" stroke="#F59E0B" stroke-width="0.5" />
+                    <polyline points="${totalInvestedPoints}" fill="none" stroke="#6B7280" stroke-width="0.5" />
                     <polyline points="${realValuePoints}" fill="none" stroke="#3B82F6" stroke-width="0.5" />
                 </svg>
             `;
@@ -208,15 +248,15 @@
                 <div class="absolute bottom-0 right-0 bg-white border border-gray-200 rounded p-2 text-xs">
                     <div class="flex items-center mb-1">
                         <div class="w-3 h-0.5 bg-green-500 mr-2"></div>
-                        <span>Investice</span>
+                        <span>Hodnota investice</span>
                     </div>
                     <div class="flex items-center mb-1">
                         <div class="w-3 h-0.5 bg-blue-500 mr-2"></div>
                         <span>Reálná hodnota</span>
                     </div>
                     <div class="flex items-center">
-                        <div class="w-3 h-0.5 bg-yellow-500 mr-2"></div>
-                        <span>Inflace</span>
+                        <div class="w-3 h-0.5 bg-gray-500 mr-2"></div>
+                        <span>Investováno celkem</span>
                     </div>
                 </div>
             `;
@@ -235,12 +275,12 @@
 
         // Automatický výpočet při změně hodnot
         document.addEventListener('DOMContentLoaded', function() {
-            const inputs = ['initialAmount', 'investmentReturn', 'inflationRate', 'years'];
+            const inputs = ['initialAmount', 'monthlyInvestment', 'investmentReturn', 'inflationRate', 'years'];
             inputs.forEach(id => {
                 document.getElementById(id).addEventListener('input', calculate);
             });
             calculate(); // Počáteční výpočet
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98725589b119afcc',t:'MTc1OTIyMDc3My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9872700da400b38c',t:'MTc1OTIyMTg1OS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
